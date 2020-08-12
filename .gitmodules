@@ -1,0 +1,3 @@
+[submodule "noveris.build"]
+	path = noveris.build
+	url = ../noveris.build

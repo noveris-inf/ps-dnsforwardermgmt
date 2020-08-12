@@ -1,0 +1,59 @@
+trigger:
+  branches:
+    include:
+    - '*'
+  tags:
+    include:
+    - v*
+
+pool:
+  vmImage: windows-latest
+
+stages:
+
+- stage: default
+
+  jobs:
+  - job: Linter
+    continueOnError: true
+    displayName: Lint Tests
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - script: |
+        docker pull github/super-linter:latest
+        docker run -e RUN_LOCAL=true -v $(System.DefaultWorkingDirectory):/tmp/lint github/super-linter
+      displayName: 'Code linter'
+      
+  - job: Standard
+    dependsOn: Linter
+    steps:
+    - checkout: self
+      submodules: true
+      persistCredentials: true
+
+    - task: PowerShell@2
+      inputs:
+        filePath: ./Build.ps1
+        arguments: '-Stage Build'
+        failOnStderr: false
+        pwsh: true
+        workingDirectory: $(Build.SourcesDirectory)
+
+    - task: UniversalPackages@0
+      condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/tags/v'))
+      inputs:
+        command: 'publish'
+        publishDirectory: '$(Build.ArtifactStagingDirectory)'
+        feedsToUsePublish: 'internal'
+        vstsFeedPublish: '64bf9dc8-3096-4913-8331-5f89a8783906/f37bffb7-c4d1-4ff9-8a65-0e8176251ff4'
+        vstsFeedPackagePublish: 'noveris.forwarddiscovery'
+        versionOption: 'custom'
+        versionPublish: '$(BUILD_VERSION)'
+
+    - task: PublishBuildArtifacts@1
+      condition: and(succeeded(), or(startsWith(variables['Build.SourceBranch'], 'refs/tags/v'), eq(variables['Build.SourceBranch'], 'refs/heads/master')))
+      inputs:
+        PathtoPublish: $(Build.ArtifactStagingDirectory)
+        ArtifactName: package
+        publishLocation: Container
